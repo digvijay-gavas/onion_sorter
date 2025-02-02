@@ -3,9 +3,9 @@ from flask import send_from_directory
 import os
 import time
 import cv2
-import json
 from flask import Flask, Response
 
+cap=None
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -40,13 +40,13 @@ def index():
 # Route to capture an image from the webcam
 @app.route('/capture', methods=['POST'])
 def capture():
-    cap = cv2.VideoCapture(0)  # Initialize the webcam
+    #cap = cv2.VideoCapture(0)  # Initialize the webcam
 
     if not cap.isOpened():
         return jsonify({"error": "Could not open webcam"}), 500
     
     ret, frame = cap.read()
-    cap.release()
+    #cap.release()
 
     if not ret:
         return jsonify({"error": "Failed to capture image"}), 500
@@ -111,7 +111,9 @@ def video_feed():
 
 # Create a route to stream the webcam feed
 def generate_frames():
-    cap = cv2.VideoCapture(0)  # Initialize webcam
+    global cap
+    if(cap==None):
+        cap = cv2.VideoCapture(0)  # Initialize webcam
     while True:
         success, frame = cap.read()
         if not success:
@@ -126,6 +128,12 @@ def generate_frames():
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
     cap.release()
+
+@app.route('/get_image_gallery', methods=['GET'])
+def get_image_gallery():
+    """Get a list of captured images."""
+    images = [os.path.join(IMAGE_DIR, f) for f in os.listdir(IMAGE_DIR)]
+    return jsonify({"images": images})
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,36 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onion Labeling and Training</title>
+</head>
 <body>
-    <h1>Onion Labeling Tool</h1>
-
-    <!-- Video Stream Preview -->
+    <h1>Onion Labeling and Training UI</h1>
     <div>
-        <h3>Preview Webcam Feed:</h3>
-        <img id="videoPreview" src="{{ url_for('video_feed') }}" width="640" height="480" />
+        <div id="videoContainer" >
+            <img id="video" src="/video_feed" alt="Live Feed"  style="border: 2px,dashed,red;" />
+        </div>
+
+        <div id="canvasContainer" style="display:none;">
+            <canvas id="canvas" style="border: 3px,solid,green;"></canvas>
+        </div>
     </div>
 
-    <div>
-        <button id="captureBtn">Capture Image</button>
-        <canvas id="canvas" style="display:none;"></canvas>
-        <br>
-        <button id="saveLabelBtn" style="display:none;">Save Label</button>
-        <button id="recaptureBtn" style="display:none;">Recapture</button>
-    </div>
-    
-    <h2>Captured Images</h2>
-    <div id="imageList">
-        {% for img in images_data %}
-            <div style="display:inline-block; text-align:center;">
-                <img src="{{ url_for('send_image', filename=img['image_filename']) }}" />
-                <div>
-                    <button onclick="deleteImage('{{ img['image_filename'] }}')">Delete</button>
-                    <pre>{{ img['label'] or "No Label" }}</pre>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
+    <br>
 
-    <!-- Existing JavaScript for capturing and labeling images -->
+    <button id="captureBtn">Capture Image</button>
+    <button id="saveLabelBtn" style="display:none;">Save Label</button>
+    <button id="recaptureBtn" style="display:none;">Recapture</button>
+
+    <br><br>
+    <h3>Captured Images:</h3>
+    <div id="imageGallery"></div>
+
     <script>
-        // Capture image logic (remains the same)
+        let currentStep='preview'
+        let capturedImage;
         let captureBtn = document.getElementById('captureBtn');
         let saveLabelBtn = document.getElementById('saveLabelBtn');
         let recaptureBtn = document.getElementById('recaptureBtn');
@@ -39,6 +38,7 @@
         let currentImage = '';
         let startX, startY, endX, endY, drawing = false;
 
+        // Capture image
         captureBtn.onclick = function () {
             fetch('/capture', {
                 method: 'POST',
@@ -48,23 +48,26 @@
                 currentImage = data.image_path;
                 let imgData = new Uint8Array(data.image_data.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 let blob = new Blob([imgData], { type: 'image/jpeg' });
-                let imgUrl = URL.createObjectURL(blob);
+                let capturedImageUrl = URL.createObjectURL(blob);
                 let img = new Image();
                 img.onload = function() {
                     canvas.width = img.width;
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
+                    document.getElementById('canvasContainer').style.display = 'block';
+                    document.getElementById('videoContainer').style.display = 'none';
                     document.getElementById('canvas').style.display = 'block';
                     captureBtn.style.display = 'none';
                     saveLabelBtn.style.display = 'block';
                     recaptureBtn.style.display = 'block';
                 };
-                img.src = imgUrl;
+                img.src = capturedImageUrl;
+                capturedImage=img
             })
             .catch(error => console.log('Error capturing image:', error));
         };
 
-        // Bounding Box Drawing Logic (remains the same)
+        // Drawing bounding box logic
         canvas.onmousedown = function (e) {
             startX = e.offsetX;
             startY = e.offsetY;
@@ -75,10 +78,10 @@
             if (drawing) {
                 endX = e.offsetX;
                 endY = e.offsetY;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                //ctx.clearRect(0, 0, canvas.width, canvas.height);
                 let img = new Image();
                 img.onload = function() {
-                    ctx.drawImage(img, 0, 0);
+                    ctx.drawImage(capturedImage, 0, 0);
                     ctx.beginPath();
                     ctx.rect(startX, startY, endX - startX, endY - startY);
                     ctx.strokeStyle = "red";
@@ -86,6 +89,7 @@
                     ctx.stroke();
                 };
                 img.src = canvas.toDataURL();
+                //img.src = capturedImageUrl;
             }
         };
 
@@ -93,6 +97,7 @@
             drawing = false;
         };
 
+        // Save label data
         saveLabelBtn.onclick = function () {
             if (!currentImage) {
                 alert("No image to label.");
@@ -105,16 +110,20 @@
                 body: JSON.stringify({ image_filename: currentImage, bbox: bbox })
             })
             .then(response => response.json())
-            .then(data => alert(data.message))
+            .then(data => {
+                //alert(data.message)
+                document.getElementById('videoContainer').style.display = 'block';
+                document.getElementById('canvasContainer').style.display = 'none';
+            })
             .catch(error => console.log('Error saving label:', error));
 
             // Reset UI
             captureBtn.style.display = 'block';
             saveLabelBtn.style.display = 'none';
             recaptureBtn.style.display = 'none';
-            canvas.style.display = 'none';
         };
 
+        // Recapture image
         recaptureBtn.onclick = function () {
             captureBtn.click();
             captureBtn.style.display = 'block';
@@ -122,19 +131,22 @@
             recaptureBtn.style.display = 'none';
         };
 
-        // Delete Image
-        function deleteImage(image_filename) {
-            fetch('/delete_image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image_filename: image_filename })
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                location.reload();
-            })
-            .catch(error => console.log('Error deleting image:', error));
-        }
+        // Fetch image list for the gallery
+        window.onload = function() {
+            fetch('/get_image_gallery')
+                .then(response => response.json())
+                .then(data => {
+                    let imageGallery = document.getElementById('imageGallery');
+                    data.images.forEach(image => {
+                        let img = document.createElement('img');
+                        img.src = image;
+                        img.style.width = '100px';
+                        img.style.margin = '10px';
+                        imageGallery.appendChild(img);
+                    });
+                })
+                .catch(error => console.log('Error fetching gallery images:', error));
+        };
     </script>
 </body>
+</html>
