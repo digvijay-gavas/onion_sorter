@@ -1,0 +1,5 @@
+train: ./images  # Path to the training images
+val: ./images    # Path to the validation images
+
+nc: 1                    # Number of classes (1 for onion)
+names: ['onion']         # Class names

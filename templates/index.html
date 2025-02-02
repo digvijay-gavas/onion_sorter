@@ -103,7 +103,7 @@
                 alert("No image to label.");
                 return;
             }
-            let bbox = [startX, startY, endX, endY];
+            let bbox = [startX/capturedImage.width, startY/capturedImage.height, endX/capturedImage.width, endY/capturedImage.height];
             fetch('/save_label', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
